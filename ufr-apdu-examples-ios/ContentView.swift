@@ -108,6 +108,17 @@ struct APDUCommandView: View {
                     .background(viewWrapper.isCardPresent ? Color.green : Color.red)
                     .cornerRadius(8)
             }
+            Button(action: {
+                getInfoFIDO()
+            }) {
+                Text("Send Command (Get getInfoFIDO)")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(viewWrapper.isCardPresent ? Color.green : Color.red)
+                    .cornerRadius(8)
+            }
         }
         .padding()
         .alert(isPresented: $viewWrapper.showAlertFlag) {
@@ -298,6 +309,59 @@ struct APDUCommandView: View {
                 outputLog += "\n--------------------------\n"
             }
         }
+    }
+    
+    func getInfoFIDO() {
+        
+        // Select apdu for PIV --> "00A4040009A00000030800001000"
+        var uFRErrorCode = UFCODER_ERROR_CODES(UFR_COMMAND_NOT_SUPPORTED.rawValue)
+        
+        // SELECT APDU Command
+        // "00A404000601020304050000" --> 6A:82
+        // "00A4040009A00000030800001000" --> 6A:82
+        // "00A404000801020304050000" --> crash
+        // "A000000647" --> crash
+        // "00A000000647" --> crash
+        // "000103004000" --> crash
+        // "00A40400080" --> crash
+        // "A0000006472F0001" --> hard crash
+        // "00A0000006472F0001" --> crash
+        let selectStr = "00A4040008"
+        //let selectStr = "00A0000006472F0001"
+        let capdu1 = selectStr.hexa
+        
+        let clen1: UInt32 = UInt32(capdu1.count)
+        var rapdu1 = [UInt8](repeating: 0x00, count: 256)
+        var rlen1: UInt32 = 0
+        let selStatus = APDUPlainTransceive(capdu1, clen1, &rapdu1, &rlen1)
+        let selStatusStr = String(cString: UFR_Status2String(selStatus))
+        print("APDUPlainTransceive() status: \(selStatusStr)")
+        outputLog += "Sent: \(selectStr)\nReceived: \(rapdu1.bytesToHex(spacing: ":", length: rlen1))\n\n"
+        if (selStatus == UFR_OK)
+        {
+            //
+            //let getSerial = "0010000001"
+            // ""
+            //let getSerial = "001000000104" // result: 69:82
+            //let getSerial = "000600008" // yk version result: 69:82
+            //let getSerial = "0010000001" // yk device info result: 69:82
+            let getSerial = "0010000001"
+            let capdu2 = getSerial.hexa
+            
+            let clen2: UInt32 = UInt32(capdu2.count)
+            var rapdu2 = [UInt8](repeating: 0x00, count: 256)
+            var rlen2: UInt32 = 0
+            let appletStatus = APDUPlainTransceive(capdu2, clen2, &rapdu2, &rlen2)
+            let appletStatusStr = String(cString: UFR_Status2String(appletStatus))
+            print("APDUPlainTransceive() selApplet status: \(appletStatusStr)")
+            outputLog += "Sent: \(getSerial)\nReceived (getInfo): \(rapdu2.bytesToHex(spacing: ":", length: rlen2))\n\n"
+            print(outputLog)
+        } else {
+            viewWrapper.alertTitle = "APDU command failed."
+            viewWrapper.alertCaption = "Status: " + String(cString: UFR_Status2String(selStatus))
+            viewWrapper.showAlertFlag = true
+        }
+        print(outputLog)
     }
     
     func processFirmwareString(_ input: String) -> String {
